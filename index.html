@@ -914,9 +914,9 @@
           <!-- vacuum bag -->
           <rect x="92" y="78" width="236" height="190" rx="28" fill="url(#bagFill)" stroke="#ffffff" stroke-width="4" opacity="0.95"/>
           <rect x="118" y="88" width="184" height="10" rx="5" fill="#2ec4b6"/>
-          <rect x="118" y="118" width="184" height="118" rx="18" fill="url(#quilt)"/>
-          <path d="M130 150 Q210 165 300 148" stroke="#fff" stroke-opacity="0.45" stroke-width="3" fill="none"/>
-          <path d="M130 180 Q210 195 300 178" stroke="#fff" stroke-opacity="0.35" stroke-width="3" fill="none"/>
+          <rect x="118" y="118" width="184" height="118" rx="16" fill="#efe6d6"/>
+          <path d="M140 148 H280 M140 178 H280 M164 128 V220 M210 128 V220 M256 128 V220" stroke="#c4a574" stroke-width="1.4" opacity=".7"/>
+          <path d="M130 160 Q210 176 300 158" stroke="#b08958" stroke-opacity=".45" stroke-width="3" fill="none"/>
           <!-- inner particles (fewer) -->
           <g fill="#3a86ff">
             <circle cx="150" cy="140" r="3.5"><animate attributeName="cx" values="150;158;150" dur="2s" repeatCount="indefinite"/></circle>
@@ -972,12 +972,12 @@
         <div class="section-head">
           <div class="badge">模組一</div>
           <h2>真空儲物袋體驗</h2>
-          <p>抽走袋內空氣，看看被子怎樣被大氣壓力壓縮，並觀察防潮狀態變化。</p>
+          <p>左是抽氣前、右是抽氣後。藍點撞到袋壁會閃一下；抽氣後碰撞變少，外壓箭頭變大。</p>
         </div>
         <div class="module">
           <div class="module-grid">
             <div class="viz-pane">
-              <canvas id="canvas-storage" width="640" height="380" aria-label="真空儲物袋粒子模擬"></canvas>
+              <canvas id="canvas-storage" width="640" height="440" aria-label="真空儲物袋抽氣前後對照"></canvas>
               <div class="legend">
                 <span><i class="dot dot-blue"></i>袋內空氣粒子</span>
                 <span><i class="dot dot-red"></i>袋外空氣粒子</span>
@@ -1039,12 +1039,12 @@
         <div class="section-head">
           <div class="badge">模組二</div>
           <h2>真空食物包裝與保鮮</h2>
-          <p>對比普通包裝與真空包裝：空氣粒子、細菌滋生曲線與保鮮計時器一次看懂。</p>
+          <p>左右同時對照。細菌斑點主要出現在仍有空氣的普通包裝，真空那側薄膜緊貼肉排。</p>
         </div>
         <div class="module">
           <div class="module-grid">
             <div class="viz-pane">
-              <canvas id="canvas-food" width="640" height="380" aria-label="真空食物包裝粒子模擬"></canvas>
+              <canvas id="canvas-food" width="640" height="440" aria-label="普通包裝與真空包裝並排對照"></canvas>
               <div class="legend">
                 <span><i class="dot dot-blue"></i>包裝內空氣</span>
                 <span><i class="dot" style="background:#7b2cbf"></i>細菌示意</span>
@@ -1276,6 +1276,98 @@
         }
       }
 
+      function pushFlash(list, x, y, color) {
+        if (list.length > 36) list.shift();
+        list.push({ x, y, life: 1, color });
+      }
+
+      function stepParticle(p, bounds, speed, flashes, color, onHit) {
+        p.x += p.vx * speed;
+        p.y += p.vy * speed;
+        let hit = false;
+        if (p.x < bounds.l + p.r) {
+          p.x = bounds.l + p.r;
+          p.vx = Math.abs(p.vx);
+          hit = true;
+        } else if (p.x > bounds.r - p.r) {
+          p.x = bounds.r - p.r;
+          p.vx = -Math.abs(p.vx);
+          hit = true;
+        }
+        if (p.y < bounds.t + p.r) {
+          p.y = bounds.t + p.r;
+          p.vy = Math.abs(p.vy);
+          hit = true;
+        } else if (p.y > bounds.b - p.r) {
+          p.y = bounds.b - p.r;
+          p.vy = -Math.abs(p.vy);
+          hit = true;
+        }
+        if (hit) {
+          pushFlash(flashes, p.x, p.y, color);
+          if (onHit) onHit();
+        }
+      }
+
+      function drawFlashes(ctx, list) {
+        for (let i = list.length - 1; i >= 0; i--) {
+          const f = list[i];
+          f.life -= 0.08;
+          if (f.life <= 0) {
+            list.splice(i, 1);
+            continue;
+          }
+          ctx.save();
+          ctx.globalAlpha = f.life;
+          ctx.strokeStyle = f.color;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(f.x, f.y, 3 + (1 - f.life) * 9, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      function columnBag(canvasW, canvasH, side, shrink) {
+        const colW = canvasW / 2;
+        const colX = side === "left" ? 4 : colW;
+        const baseW = colW * 0.76;
+        const baseH = canvasH * 0.46;
+        const w = baseW * (1 - shrink * 0.36);
+        const h = baseH * (1 - shrink * 0.34);
+        return {
+          x: colX + (colW - w) / 2,
+          y: canvasH * 0.26 + (baseH - h) * 0.45,
+          w,
+          h,
+          t: shrink,
+        };
+      }
+
+      function innerBounds(bag, topPad) {
+        return {
+          l: bag.x + 8,
+          t: bag.y + topPad,
+          r: bag.x + bag.w - 8,
+          b: bag.y + bag.h - 8,
+        };
+      }
+
+      function spawnParticles(bag, count, speed) {
+        const list = [];
+        for (let i = 0; i < count; i++) {
+          list.push(new Particle(
+            lerp(bag.x + 14, bag.x + bag.w - 14, Math.random()),
+            lerp(bag.y + 22, bag.y + bag.h - 12, Math.random()),
+            2.6 + Math.random() * 1.6,
+            "#3a86ff",
+            (Math.random() - 0.5) * speed,
+            (Math.random() - 0.5) * speed
+          ));
+        }
+        return list;
+      }
+
       function drawPressureArrows(ctx, bag, strength, color = "#e76f51") {
         const n = 5;
         const len = 10 + strength * 28;
@@ -1331,47 +1423,31 @@
         vacuum: 0,
         pumping: false,
         particlesIn: [],
-        particlesOut: [],
+        refParticles: [],
+        flashes: [],
+        hitsL: 0,
+        hitsR: 0,
         w: 640,
-        h: 380,
+        h: 420,
         ctx: null,
       };
 
+      function layoutStorage() {
+        return {
+          before: columnBag(storage.w, storage.h, "left", 0),
+          after: columnBag(storage.w, storage.h, "right", storage.vacuum / 100),
+        };
+      }
+
       function initStorageParticles() {
-        storage.particlesIn = [];
-        storage.particlesOut = [];
-        const bag = getStorageBag();
-        for (let i = 0; i < 55; i++) {
-          storage.particlesIn.push(new Particle(
-            lerp(bag.x + 12, bag.x + bag.w - 12, Math.random()),
-            lerp(bag.y + 12, bag.y + bag.h - 12, Math.random()),
-            3 + Math.random() * 2,
-            "#3a86ff",
-            (Math.random() - 0.5) * 1.4,
-            (Math.random() - 0.5) * 1.4
-          ));
-        }
-        for (let i = 0; i < 40; i++) {
-          storage.particlesOut.push(new Particle(
-            Math.random() * storage.w,
-            Math.random() * storage.h,
-            2.5 + Math.random() * 1.5,
-            "#ef476f",
-            (Math.random() - 0.5) * 0.9,
-            (Math.random() - 0.5) * 0.9
-          ));
-        }
+        const { before, after } = layoutStorage();
+        storage.refParticles = spawnParticles(before, 26, 1.6);
+        storage.particlesIn = spawnParticles(after, 26, 1.5);
+        storage.flashes = [];
       }
 
       function getStorageBag() {
-        const t = storage.vacuum / 100;
-        const baseW = storage.w * 0.52;
-        const baseH = storage.h * 0.58;
-        const w = baseW * (1 - t * 0.48);
-        const h = baseH * (1 - t * 0.42);
-        const x = (storage.w - w) / 2;
-        const y = storage.h * 0.18 + (baseH - h) * 0.35;
-        return { x, y, w, h, t };
+        return layoutStorage().after;
       }
 
       function updatePressureCompare(prefix, innerAtm, balancedMsg, hotMsg) {
@@ -1418,18 +1494,8 @@
       function setStorageVacuum(v) {
         const prev = storage.vacuum;
         storage.vacuum = clamp(v, 0, 100);
-        const targetCount = Math.round(55 * (1 - storage.vacuum / 100 * 0.92));
-        while (storage.particlesIn.length > targetCount) {
-          const p = storage.particlesIn.pop();
-          // fly toward pump (top-right)
-          if (p) {
-            p.vx = 4 + Math.random() * 3;
-            p.vy = -3 - Math.random() * 2;
-            p._escaping = true;
-            storage.particlesOut.push(p);
-            setTimeout(() => { p.alive = false; }, 400);
-          }
-        }
+        const targetCount = Math.round(26 * (1 - storage.vacuum / 100 * 0.88));
+        while (storage.particlesIn.length > targetCount) storage.particlesIn.pop();
         while (storage.particlesIn.length < targetCount && storage.vacuum < prev) {
           const bag = getStorageBag();
           storage.particlesIn.push(new Particle(
@@ -1444,166 +1510,282 @@
         updateStorageUI();
       }
 
+      function hexToRgb(hex) {
+        const n = parseInt(hex.slice(1), 16);
+        return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+      }
+
+      function mixColor(a, b, t) {
+        const pa = hexToRgb(a);
+        const pb = hexToRgb(b);
+        return "rgb(" +
+          Math.round(lerp(pa.r, pb.r, t)) + "," +
+          Math.round(lerp(pa.g, pb.g, t)) + "," +
+          Math.round(lerp(pa.b, pb.b, t)) + ")";
+      }
+
+      function drawSceneBackdrop(ctx, w, h) {
+        const sky = ctx.createLinearGradient(0, 0, 0, h);
+        sky.addColorStop(0, "#eef7f5");
+        sky.addColorStop(0.58, "#d7ebe7");
+        sky.addColorStop(0.58, "#c9b08a");
+        sky.addColorStop(1, "#a88862");
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w, h);
+        ctx.save();
+        ctx.globalAlpha = 0.22;
+        ctx.strokeStyle = "#7a5a34";
+        ctx.lineWidth = 1;
+        for (let y = h * 0.6; y < h; y += 8) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.bezierCurveTo(w * 0.25, y + 3, w * 0.7, y - 2, w, y + 1);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawGroundShadow(ctx, x, y, w, h) {
+        ctx.save();
+        ctx.fillStyle = "rgba(70, 48, 24, 0.22)";
+        ctx.beginPath();
+        ctx.ellipse(x + w / 2, y + h + 8, w * 0.42, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawPlasticFilm(ctx, x, y, w, h, radius, cling) {
+        ctx.save();
+        roundRect(ctx, x, y, w, h, radius);
+        const film = ctx.createLinearGradient(x, y, x + w, y + h);
+        film.addColorStop(0, "rgba(255,255,255,0.42)");
+        film.addColorStop(0.45, "rgba(190,220,230,0.12)");
+        film.addColorStop(1, "rgba(255,255,255,0.28)");
+        ctx.fillStyle = film;
+        ctx.fill();
+        ctx.strokeStyle = "rgba(90,120,130,0.55)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.clip();
+        ctx.fillStyle = "rgba(255,255,255,0.38)";
+        ctx.beginPath();
+        ctx.ellipse(x + w * 0.28, y + h * 0.18, Math.max(12, w * 0.14), Math.max(6, h * 0.07), -0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(70,100,110," + (0.12 + cling * 0.28) + ")";
+        ctx.lineWidth = 1.1;
+        const bands = [[0.1, 0.22], [0.78, 0.9]];
+        bands.forEach(([a, b], band) => {
+          const lines = 2 + Math.round(cling * 2);
+          for (let i = 0; i < lines; i++) {
+            const yy = y + h * (a + ((i + 0.5) / lines) * (b - a));
+            const sag = (3 + cling * 8) * (band === 0 ? 1 : -1);
+            ctx.beginPath();
+            ctx.moveTo(x + 8, yy);
+            ctx.quadraticCurveTo(x + w * 0.5, yy + sag, x + w - 8, yy + sag * 0.2);
+            ctx.stroke();
+          }
+        });
+        ctx.restore();
+      }
+
+      function drawZipTrack(ctx, x, y, w, closed) {
+        ctx.save();
+        ctx.fillStyle = "#e6edf0";
+        roundRect(ctx, x, y, w, 11, 3);
+        ctx.fill();
+        ctx.strokeStyle = "#8ea0a8";
+        ctx.lineWidth = 1;
+        for (let i = 6; i < w - 6; i += 5) {
+          ctx.beginPath();
+          ctx.moveTo(x + i, y + 2);
+          ctx.lineTo(x + i, y + 9);
+          ctx.stroke();
+        }
+        const sx = closed ? x + w - 18 : x + 4;
+        ctx.fillStyle = closed ? "#d4573c" : "#314047";
+        roundRect(ctx, sx, y - 2, 16, 15, 3);
+        ctx.fill();
+        ctx.fillStyle = "#f4f7f8";
+        ctx.fillRect(sx + 6, y + 1, 3, 9);
+        ctx.restore();
+      }
+
+      function drawQuilt(ctx, x, y, w, h, squash) {
+        ctx.save();
+        roundRect(ctx, x, y, w, h, 12);
+        ctx.clip();
+        const g = ctx.createLinearGradient(x, y, x, y + h);
+        g.addColorStop(0, "#f7f3ea");
+        g.addColorStop(0.45, "#e4d5bc");
+        g.addColorStop(1, "#c9b18d");
+        ctx.fillStyle = g;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = "rgba(130, 98, 58, 0.38)";
+        ctx.lineWidth = 1;
+        for (let c = 1; c < 4; c++) {
+          ctx.beginPath();
+          ctx.moveTo(x + (w * c) / 4, y + 3);
+          ctx.lineTo(x + (w * c) / 4, y + h - 3);
+          ctx.stroke();
+        }
+        for (let r = 1; r < 3; r++) {
+          const yy = y + (h * r) / 3;
+          ctx.beginPath();
+          ctx.moveTo(x + 4, yy);
+          ctx.quadraticCurveTo(x + w / 2, yy + 4 + squash * 8, x + w - 4, yy);
+          ctx.stroke();
+        }
+        ctx.fillStyle = "rgba(110, 78, 40, 0.13)";
+        ctx.beginPath();
+        ctx.ellipse(x + w * 0.38, y + h * 0.58, w * 0.24, h * 0.2, 0.15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        ctx.strokeStyle = "rgba(120, 88, 50, 0.45)";
+        ctx.lineWidth = 1.4;
+        roundRect(ctx, x, y, w, h, 12);
+        ctx.stroke();
+      }
+
+      function drawValveAndPump(ctx, bag, active) {
+        const vx = bag.x + bag.w - 8;
+        const vy = bag.y + bag.h * 0.28;
+        ctx.save();
+        ctx.fillStyle = "#dfe7ea";
+        ctx.beginPath();
+        ctx.arc(vx, vy, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#5d737c";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.strokeStyle = "#3d4c54";
+        ctx.lineWidth = 4;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(vx + 6, vy);
+        ctx.quadraticCurveTo(vx + 36, vy - 18, vx + 48, vy - 46);
+        ctx.stroke();
+        const px = vx + 34;
+        const py = vy - 78;
+        ctx.fillStyle = "#2c3940";
+        roundRect(ctx, px, py, 34, 46, 6);
+        ctx.fill();
+        ctx.fillStyle = active ? "#2ec4b6" : "#7d8f86";
+        roundRect(ctx, px + 6, py + 8, 22, 12, 3);
+        ctx.fill();
+        ctx.fillStyle = "#c5d0d4";
+        roundRect(ctx, px + 12, py - 10, 10, 12, 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawSteak(ctx, x, y, w, h, spoil) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x + w * 0.1, y + h * 0.38);
+        ctx.bezierCurveTo(x + w * 0.02, y + h * 0.12, x + w * 0.38, y + h * 0.02, x + w * 0.68, y + h * 0.14);
+        ctx.bezierCurveTo(x + w * 1.02, y + h * 0.24, x + w * 0.96, y + h * 0.72, x + w * 0.72, y + h * 0.9);
+        ctx.bezierCurveTo(x + w * 0.42, y + h * 1.04, x + w * 0.08, y + h * 0.86, x + w * 0.05, y + h * 0.55);
+        ctx.closePath();
+        ctx.clip();
+        const g = ctx.createRadialGradient(x + w * 0.42, y + h * 0.4, 10, x + w * 0.5, y + h * 0.5, w * 0.62);
+        g.addColorStop(0, mixColor("#f6b2aa", "#6d4c34", spoil * 0.5));
+        g.addColorStop(0.5, mixColor("#c44545", "#5a3b28", spoil * 0.65));
+        g.addColorStop(1, mixColor("#8d2432", "#3a2a1c", spoil * 0.75));
+        ctx.fillStyle = g;
+        ctx.fillRect(x - 4, y - 4, w + 8, h + 8);
+        ctx.strokeStyle = "rgba(255, 236, 220, " + (0.75 - spoil * 0.4) + ")";
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(x + w * 0.22, y + h * 0.42);
+        ctx.bezierCurveTo(x + w * 0.4, y + h * 0.3, x + w * 0.58, y + h * 0.58, x + w * 0.8, y + h * 0.46);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x + w * 0.28, y + h * 0.64);
+        ctx.quadraticCurveTo(x + w * 0.5, y + h * 0.74, x + w * 0.7, y + h * 0.6);
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(90, 24, 24, 0.2)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 5; i++) {
+          const yy = y + h * (0.28 + i * 0.1);
+          ctx.beginPath();
+          ctx.moveTo(x + w * 0.18, yy);
+          ctx.quadraticCurveTo(x + w * 0.5, yy + 5, x + w * 0.82, yy - 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawStorageBag(ctx, bag, particles, title, onHit) {
+        ctx.fillStyle = "#16323f";
+        ctx.font = "bold 13px 'Noto Sans TC', sans-serif";
+        ctx.fillText(title, bag.x, bag.y - 10);
+        drawGroundShadow(ctx, bag.x, bag.y, bag.w, bag.h);
+        const inset = 12 + bag.t * 4;
+        drawQuilt(ctx, bag.x + inset, bag.y + 22, bag.w - inset * 2, bag.h - 34, bag.t);
+        drawPlasticFilm(ctx, bag.x, bag.y, bag.w, bag.h, 14, bag.t);
+        drawZipTrack(ctx, bag.x + bag.w * 0.14, bag.y + 5, bag.w * 0.58, bag.t > 0.25);
+        drawPressureArrows(ctx, bag, bag.t < 0.08 ? 0.12 : bag.t);
+        const bounds = innerBounds(bag, 20);
+        const speed = 1 - bag.t * 0.55;
+        particles.forEach((p) => {
+          stepParticle(p, bounds, speed, storage.flashes, "#9ec5ff", onHit);
+          p.draw(ctx);
+        });
+      }
+
       function drawStorage() {
         const ctx = storage.ctx;
         if (!ctx) return;
         const { w, h } = storage;
         ctx.clearRect(0, 0, w, h);
-
-        // soft lab bg dots
-        ctx.fillStyle = "rgba(255,255,255,0.35)";
-        for (let i = 0; i < 18; i++) {
-          ctx.beginPath();
-          ctx.arc((i * 97) % w, (i * 53) % h, 1.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        const bag = getStorageBag();
-        const t = bag.t;
-
-        // outside particles
-        const outBounds = { l: 0, t: 0, r: w, b: h };
-        storage.particlesOut.forEach((p) => {
-          if (!p.alive) return;
-          if (p._escaping) {
-            p.x += p.vx;
-            p.y += p.vy;
-          } else {
-            // keep outside bag
-            p.update(outBounds, true);
-            if (p.x > bag.x && p.x < bag.x + bag.w && p.y > bag.y && p.y < bag.y + bag.h) {
-              p.x = bag.x - 8;
-            }
-          }
-          p.draw(ctx);
-        });
-
-        // pressure arrows
-        drawPressureArrows(ctx, bag, t);
-
-        // bag
-        ctx.save();
-        roundRect(ctx, bag.x, bag.y, bag.w, bag.h, 16);
-        ctx.fillStyle = "rgba(255,255,255,0.55)";
-        ctx.fill();
-        ctx.strokeStyle = "rgba(26,155,142,0.65)";
-        ctx.lineWidth = 3;
-        ctx.stroke();
-
-        // zipper
-        ctx.fillStyle = "#2a9d8f";
-        roundRect(ctx, bag.x + bag.w * 0.1, bag.y + 4, bag.w * 0.8, 8, 4);
-        ctx.fill();
-
-        // blanket / clothes
-        const clothInset = 14 + t * 8;
-        roundRect(ctx, bag.x + clothInset, bag.y + 22, bag.w - clothInset * 2, bag.h - 36, 10);
-        const clothGrad = ctx.createLinearGradient(bag.x, bag.y, bag.x + bag.w, bag.y + bag.h);
-        clothGrad.addColorStop(0, "#f4a261");
-        clothGrad.addColorStop(1, "#e9c46a");
-        ctx.fillStyle = clothGrad;
-        ctx.fill();
-        ctx.strokeStyle = "rgba(180,100,40,0.35)";
-        ctx.stroke();
-        // folds
-        ctx.strokeStyle = "rgba(255,255,255,0.45)";
-        ctx.lineWidth = 2;
-        for (let i = 0; i < 3; i++) {
-          const yy = bag.y + 40 + i * (bag.h * 0.18);
-          ctx.beginPath();
-          ctx.moveTo(bag.x + clothInset + 8, yy);
-          ctx.quadraticCurveTo(bag.x + bag.w / 2, yy + 6 - t * 4, bag.x + bag.w - clothInset - 8, yy);
-          ctx.stroke();
-        }
-        ctx.restore();
-
-        // inside particles
-        const inBounds = {
-          l: bag.x + 6,
-          t: bag.y + 16,
-          r: bag.x + bag.w - 6,
-          b: bag.y + bag.h - 6,
-        };
-        storage.particlesIn.forEach((p) => {
-          p.vx *= 0.998;
-          p.vy *= 0.998;
-          // slow down as vacuum increases
-          const damp = 1 - t * 0.4;
-          p.x += p.vx * damp;
-          p.y += p.vy * damp;
-          if (p.x < inBounds.l + p.r || p.x > inBounds.r - p.r) p.vx *= -1;
-          if (p.y < inBounds.t + p.r || p.y > inBounds.b - p.r) p.vy *= -1;
-          p.x = clamp(p.x, inBounds.l + p.r, inBounds.r - p.r);
-          p.y = clamp(p.y, inBounds.t + p.r, inBounds.b - p.r);
-          p.draw(ctx);
-        });
-
-        // pump icon
-        ctx.save();
-        ctx.fillStyle = "#16323f";
+        drawSceneBackdrop(ctx, w, h);
+        const { before, after } = layoutStorage();
+        storage.hitsL *= 0.992;
+        storage.hitsR *= 0.992;
+        drawStorageBag(ctx, before, storage.refParticles, "抽氣前", () => { storage.hitsL += 1; });
+        drawStorageBag(ctx, after, storage.particlesIn, "抽氣後", () => { storage.hitsR += 1; });
+        drawFlashes(ctx, storage.flashes);
+        ctx.fillStyle = "rgba(22,50,63,0.88)";
         ctx.font = "bold 13px 'Noto Sans TC', sans-serif";
-        ctx.fillText(t > 0.05 ? "抽氣中…" : "待機幫浦", w - 100, 28);
-        ctx.beginPath();
-        ctx.strokeStyle = "#1a9b8e";
-        ctx.lineWidth = 3;
-        ctx.arc(w - 28, 48, 14, 0, Math.PI * 2);
-        ctx.stroke();
-        if (storage.pumping || t > 0) {
-          ctx.beginPath();
-          ctx.strokeStyle = "#2ec4b6";
-          ctx.arc(w - 28, 48, 8, 0, Math.PI * 1.5 * Math.max(t, 0.2));
-          ctx.stroke();
-        }
-        ctx.restore();
-
-        // label
-        ctx.fillStyle = "rgba(22,50,63,0.75)";
-        ctx.font = "bold 14px 'Noto Sans TC', sans-serif";
-        ctx.fillText("真空儲物袋（內含被子）", 16, h - 14);
+        ctx.fillText(
+          "袋壁碰撞　前 " + Math.round(storage.hitsL) + "　後 " + Math.round(storage.hitsR) + "　（亮圈＝粒子撞到袋壁）",
+          16,
+          h - 14
+        );
       }
 
       /* ========== Module 2: Food packaging ========== */
       const food = {
-        mode: "normal", // normal | vacuum
-        vacuumAnim: 0,
+        mode: "normal",
+        vacuumAnim: 1,
         day: 0,
         playing: false,
         playAcc: 0,
-        particles: [],
-        bacteria: [],
-        historyN: [],
-        historyV: [],
+        leftParticles: [],
+        rightParticles: [],
+        flashes: [],
+        hitsL: 0,
+        hitsR: 0,
         w: 640,
-        h: 380,
+        h: 420,
         ctx: null,
         chartCtx: null,
         chartW: 400,
         chartH: 120,
       };
 
+      function layoutFood() {
+        return {
+          left: columnBag(food.w, food.h, "left", 0),
+          right: columnBag(food.w, food.h, "right", 0.15 + food.vacuumAnim * 0.85),
+        };
+      }
+
       function initFoodParticles() {
-        food.particles = [];
-        food.bacteria = [];
-        for (let i = 0; i < 45; i++) {
-          food.particles.push(new Particle(
-            80 + Math.random() * 400,
-            60 + Math.random() * 240,
-            3 + Math.random() * 2,
-            "#3a86ff",
-            (Math.random() - 0.5) * 1.2,
-            (Math.random() - 0.5) * 1.2
-          ));
-        }
-        for (let i = 0; i < 8; i++) {
-          food.bacteria.push({
-            x: 200 + Math.random() * 200,
-            y: 140 + Math.random() * 100,
-            r: 4 + Math.random() * 3,
-            phase: Math.random() * Math.PI * 2,
-          });
-        }
-        food.historyN = [0.08];
-        food.historyV = [0.05];
+        const { left, right } = layoutFood();
+        food.leftParticles = spawnParticles(left, 18, 1.35);
+        food.rightParticles = spawnParticles(right, 4, 0.7);
+        food.flashes = [];
       }
 
       function setFoodMode(mode) {
@@ -1611,42 +1793,13 @@
         document.getElementById("food-normal").classList.toggle("active", mode === "normal");
         document.getElementById("food-vacuum").classList.toggle("active", mode === "vacuum");
         document.getElementById("food-status").textContent =
-          mode === "vacuum" ? "真空包裝模式" : "普通包裝模式";
+          mode === "vacuum" ? "正在看右側真空包裝" : "正在看左側普通包裝";
         document.getElementById("food-status").classList.toggle("warn", mode === "normal");
-        if (mode === "vacuum") {
-          const start = food.vacuumAnim;
-          const target = 1;
-          const t0 = performance.now();
-          const run = (now) => {
-            const p = clamp((now - t0) / 900, 0, 1);
-            food.vacuumAnim = lerp(start, target, p);
-            syncFoodParticleCount();
-            updateFoodLabels();
-            if (p < 1) requestAnimationFrame(run);
-          };
-          requestAnimationFrame(run);
-        } else {
-          food.vacuumAnim = 0;
-          syncFoodParticleCount();
-          updateFoodLabels();
-        }
+        updateFoodLabels();
       }
 
       function syncFoodParticleCount() {
-        const target = food.mode === "vacuum"
-          ? Math.round(45 * (1 - food.vacuumAnim * 0.95))
-          : 45;
-        while (food.particles.length > target) food.particles.pop();
-        while (food.particles.length < target) {
-          food.particles.push(new Particle(
-            100 + Math.random() * 360,
-            80 + Math.random() * 200,
-            3 + Math.random() * 2,
-            "#3a86ff",
-            (Math.random() - 0.5) * 1.2,
-            (Math.random() - 0.5) * 1.2
-          ));
-        }
+        if (!food.leftParticles.length) initFoodParticles();
       }
 
       function bacteriaLevel(day, vacuum) {
@@ -1662,12 +1815,12 @@
         else if (lvl < 0.55) el.textContent = "中";
         else if (lvl < 0.8) el.textContent = "高";
         else el.textContent = "很高";
-        const t = food.mode === "vacuum" ? food.vacuumAnim : 0;
+        const t = food.mode === "vacuum" ? 0.18 : 1;
         updatePressureCompare(
           "food",
-          1 - t * 0.82,
-          "普通包裝：袋內外氣壓接近",
-          "袋內氣壓 < 袋外大氣壓 → 袋子緊貼食物"
+          t,
+          "左側普通包裝：袋內外氣壓接近，細菌較易滋生",
+          "右側真空包裝：袋內氣壓較低，薄膜緊貼食物"
         );
       }
 
@@ -1746,18 +1899,45 @@
       }
 
       function getFoodBag() {
-        const t = food.mode === "vacuum" ? food.vacuumAnim : 0;
-        const baseW = food.w * 0.58;
-        const baseH = food.h * 0.5;
-        const w = baseW * (1 - t * 0.12);
-        const h = baseH * (1 - t * 0.28);
-        return {
-          x: (food.w - w) / 2,
-          y: food.h * 0.22 + (baseH - h) * 0.4,
-          w,
-          h,
-          t,
-        };
+        return layoutFood().right;
+      }
+
+      function drawFoodSpots(ctx, bag, count) {
+        for (let i = 0; i < count; i++) {
+          const x = bag.x + bag.w * (0.28 + (i % 4) * 0.14);
+          const y = bag.y + bag.h * (0.42 + (i % 3) * 0.14);
+          const pulse = 1 + Math.sin(performance.now() * 0.004 + i) * 0.12;
+          ctx.beginPath();
+          ctx.fillStyle = "rgba(92, 48, 28, 0.62)";
+          ctx.ellipse(x, y, 4.2 * pulse, 2.6 * pulse, i, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function drawFoodSide(ctx, bag, particles, spoil, spots, title, focused, onHit) {
+        ctx.fillStyle = focused ? "#0f7a70" : "#16323f";
+        ctx.font = "bold 13px 'Noto Sans TC', sans-serif";
+        ctx.fillText(title, bag.x, bag.y - 10);
+        if (focused) {
+          ctx.save();
+          ctx.strokeStyle = "#1a9b8e";
+          ctx.lineWidth = 3;
+          roundRect(ctx, bag.x - 6, bag.y - 6, bag.w + 12, bag.h + 12, 16);
+          ctx.stroke();
+          ctx.restore();
+        }
+        drawGroundShadow(ctx, bag.x, bag.y, bag.w, bag.h);
+        const pad = 16 + bag.t * 6;
+        drawSteak(ctx, bag.x + pad * 0.55, bag.y + pad * 0.4, bag.w - pad * 1.2, bag.h - pad, spoil);
+        drawFoodSpots(ctx, bag, spots);
+        drawPlasticFilm(ctx, bag.x, bag.y, bag.w, bag.h, 14, 0.2 + bag.t * 0.8);
+        drawZipTrack(ctx, bag.x + bag.w * 0.16, bag.y + 5, bag.w * 0.55, bag.t > 0.5);
+        drawPressureArrows(ctx, bag, bag.t < 0.2 ? 0.12 : 0.92);
+        const bounds = innerBounds(bag, 18);
+        particles.forEach((p) => {
+          stepParticle(p, bounds, bag.t > 0.5 ? 0.45 : 1, food.flashes, "#9ec5ff", onHit);
+          p.draw(ctx);
+        });
       }
 
       function drawFood() {
@@ -1765,85 +1945,29 @@
         if (!ctx) return;
         const { w, h } = food;
         ctx.clearRect(0, 0, w, h);
-
-        const bag = getFoodBag();
-        const t = bag.t;
-
-        // outside particles (atmosphere)
-        ctx.globalAlpha = 0.55;
-        for (let i = 0; i < 20; i++) {
-          const px = (i * 73 + performance.now() * 0.02) % w;
-          const py = (i * 41) % h;
-          if (px > bag.x && px < bag.x + bag.w && py > bag.y && py < bag.y + bag.h) continue;
-          ctx.beginPath();
-          ctx.fillStyle = "#ef476f";
-          ctx.arc(px, py, 2.2, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-
-        drawPressureArrows(ctx, bag, t);
-
-        // package
-        ctx.save();
-        roundRect(ctx, bag.x, bag.y, bag.w, bag.h, 14);
-        ctx.fillStyle = t > 0.5 ? "rgba(220,245,240,0.65)" : "rgba(255,255,255,0.5)";
-        ctx.fill();
-        ctx.strokeStyle = t > 0.3 ? "#1a9b8e" : "#7a9eab";
-        ctx.lineWidth = 3;
-        ctx.stroke();
-
-        // meat / food
-        const foodPad = 18 + t * 10;
-        roundRect(ctx, bag.x + foodPad, bag.y + foodPad * 0.8, bag.w - foodPad * 2, bag.h - foodPad * 1.6, 12);
-        const mg = ctx.createLinearGradient(bag.x, bag.y, bag.x + bag.w, bag.y + bag.h);
-        mg.addColorStop(0, "#c1121f");
-        mg.addColorStop(0.5, "#e63946");
-        mg.addColorStop(1, "#9d0208");
-        ctx.fillStyle = mg;
-        ctx.fill();
-        // fat marbling
-        ctx.strokeStyle = "rgba(255,230,200,0.55)";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(bag.x + foodPad + 10, bag.y + bag.h * 0.4);
-        ctx.quadraticCurveTo(bag.x + bag.w * 0.5, bag.y + bag.h * 0.35, bag.x + bag.w - foodPad - 10, bag.y + bag.h * 0.55);
-        ctx.stroke();
-        ctx.restore();
-
-        // air particles inside
-        const bounds = {
-          l: bag.x + 8,
-          t: bag.y + 8,
-          r: bag.x + bag.w - 8,
-          b: bag.y + bag.h - 8,
-        };
-        food.particles.forEach((p) => {
-          p.update(bounds, true);
-          p.draw(ctx);
-        });
-
-        // bacteria
-        const bLvl = bacteriaLevel(food.day, food.mode === "vacuum");
-        const showCount = Math.round(bLvl * 12);
-        food.bacteria.forEach((b, i) => {
-          if (i >= showCount) return;
-          const pulse = 1 + Math.sin(performance.now() * 0.004 + b.phase) * 0.15;
-          ctx.beginPath();
-          ctx.fillStyle = "rgba(123,44,191,0.75)";
-          ctx.arc(b.x, b.y, b.r * pulse * (0.7 + bLvl), 0, Math.PI * 2);
-          ctx.fill();
-          // keep bacteria near food
-          b.x += Math.sin(performance.now() * 0.001 + b.phase) * 0.15;
-          b.y += Math.cos(performance.now() * 0.0012 + b.phase) * 0.12;
-          b.x = clamp(b.x, bag.x + 20, bag.x + bag.w - 20);
-          b.y = clamp(b.y, bag.y + 20, bag.y + bag.h - 20);
-        });
-
-        ctx.fillStyle = "rgba(22,50,63,0.8)";
-        ctx.font = "bold 14px 'Noto Sans TC', sans-serif";
-        ctx.fillText(food.mode === "vacuum" ? "真空包裝：袋緊貼食物" : "普通包裝：袋內仍有空氣", 16, h - 14);
-
+        drawSceneBackdrop(ctx, w, h);
+        if (!food.leftParticles.length) initFoodParticles();
+        const { left, right } = layoutFood();
+        const normalLvl = bacteriaLevel(food.day, false);
+        const vacuumLvl = bacteriaLevel(food.day, true);
+        food.hitsL *= 0.992;
+        food.hitsR *= 0.992;
+        drawFoodSide(
+          ctx, left, food.leftParticles, normalLvl, Math.round(normalLvl * 8),
+          "普通包裝", food.mode === "normal", () => { food.hitsL += 1; }
+        );
+        drawFoodSide(
+          ctx, right, food.rightParticles, vacuumLvl * 0.35, Math.round(vacuumLvl * 3),
+          "真空包裝", food.mode === "vacuum", () => { food.hitsR += 1; }
+        );
+        drawFlashes(ctx, food.flashes);
+        ctx.fillStyle = "rgba(22,50,63,0.88)";
+        ctx.font = "bold 13px 'Noto Sans TC', sans-serif";
+        ctx.fillText(
+          "細菌斑點主要長在仍有空氣的左側　碰撞　左 " + Math.round(food.hitsL) + "　右 " + Math.round(food.hitsR),
+          16,
+          h - 14
+        );
         drawBacteriaChart();
       }
 
@@ -1860,6 +1984,8 @@
         pressHeld: false,
         lastBag: null,
         canvasPressing: false,
+        flashes: [],
+        hits: 0,
       };
 
       function updateSpongePressureUI() {
@@ -1987,147 +2113,128 @@
         if (!ctx) return;
         const { w, h } = sponge;
         ctx.clearRect(0, 0, w, h);
-
-        // table
-        ctx.fillStyle = "rgba(255,255,255,0.4)";
-        roundRect(ctx, 40, h - 48, w - 80, 28, 8);
-        ctx.fill();
+        drawSceneBackdrop(ctx, w, h);
 
         if (!sponge.bagIn) {
-          // sponge alone
-          const sx = w / 2 - 70;
-          const sy = h / 2 - 40;
-          drawSpongeBody(ctx, sx, sy, 140, 90, 0);
-          ctx.fillStyle = "rgba(22,50,63,0.75)";
+          const sx = w / 2 - 78;
+          const sy = h * 0.42;
+          drawGroundShadow(ctx, sx, sy, 156, 78);
+          drawSpongeBody(ctx, sx, sy, 156, 78, 0);
+          ctx.fillStyle = "rgba(22,50,63,0.82)";
           ctx.font = "bold 14px 'Noto Sans TC', sans-serif";
-          ctx.fillText("準備中的海綿（尚未入袋）", 16, h - 14);
+          ctx.fillText("廚房海綿（尚未入袋）", 16, h - 16);
           return;
         }
 
         const bag = getSpongeBag();
-        drawPressureArrows(ctx, bag, bag.p);
-
-        // bag
-        ctx.save();
-        roundRect(ctx, bag.x, bag.y, bag.w, bag.h, 14);
-        ctx.fillStyle = "rgba(255,255,255,0.42)";
-        ctx.fill();
-        ctx.strokeStyle = sponge.sealed ? "#1a9b8e" : "#5b8a9a";
-        ctx.lineWidth = 3;
-        ctx.stroke();
-
-        // seal line
-        if (sponge.sealed) {
-          ctx.strokeStyle = "#e76f51";
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.moveTo(bag.x + 16, bag.y + 12);
-          ctx.lineTo(bag.x + bag.w - 16, bag.y + 12);
-          ctx.stroke();
-          ctx.fillStyle = "#e76f51";
-          ctx.font = "bold 12px 'Noto Sans TC', sans-serif";
-          ctx.fillText("已密封", bag.x + bag.w - 58, bag.y + 28);
-        } else {
-          ctx.fillStyle = "#2a9d8f";
-          roundRect(ctx, bag.x + bag.w * 0.15, bag.y + 5, bag.w * 0.7, 7, 3);
-          ctx.fill();
-        }
-
-        // sponge inside
-        const pad = 22 + bag.p * 6;
-        const sh = (bag.h - pad * 1.5) * (1 - bag.p * 0.35);
+        drawGroundShadow(ctx, bag.x, bag.y, bag.w, bag.h);
+        const pad = 18 + bag.p * 4;
+        const sh = Math.max(26, (bag.h - 36) * (1 - bag.p * 0.42));
         drawSpongeBody(
           ctx,
           bag.x + pad,
-          bag.y + pad * 0.9 + (bag.h - pad * 1.5 - sh) * 0.5,
+          bag.y + (bag.h - sh) * 0.62,
           bag.w - pad * 2,
-          Math.max(28, sh),
+          sh,
           bag.p
         );
-        ctx.restore();
-
-        // particles
-        const bounds = {
-          l: bag.x + 6,
-          t: bag.y + 18,
-          r: bag.x + bag.w - 6,
-          b: bag.y + bag.h - 6,
-        };
-        const target = sponge.sealed
-          ? Math.round(50 * (1 - bag.p * 0.9))
-          : Math.round(50 * (1 - bag.p * 0.85));
-        while (sponge.particles.length > target) {
-          const gone = sponge.particles.pop();
-          // escape visual briefly omitted for simplicity
-          void gone;
+        drawPlasticFilm(ctx, bag.x, bag.y, bag.w, bag.h, 16, bag.p);
+        drawZipTrack(ctx, bag.x + bag.w * 0.14, bag.y + 5, bag.w * 0.72, sponge.sealed);
+        drawPressureArrows(ctx, bag, bag.p);
+        if (sponge.step === 2) {
+          drawPressingHand(ctx, bag.x + bag.w / 2, bag.y + 6, sponge.pressHeld);
         }
+
+        const bounds = innerBounds(bag, 18);
+        const target = Math.round(50 * (1 - bag.p * (sponge.sealed ? 0.9 : 0.85)));
+        while (sponge.particles.length > target) sponge.particles.pop();
+        sponge.hits *= 0.992;
         sponge.particles.forEach((p) => {
-          p.update(bounds, true);
+          stepParticle(p, bounds, 1 - bag.p * 0.5, sponge.flashes, "#9ec5ff", () => { sponge.hits += 1; });
           p.draw(ctx);
         });
+        drawFlashes(ctx, sponge.flashes);
 
-        // escaping particles when pressing
         if (sponge.pressHeld && !sponge.sealed) {
-          for (let i = 0; i < 2; i++) {
+          ctx.fillStyle = "rgba(58,134,255,0.55)";
+          for (let i = 0; i < 4; i++) {
             ctx.beginPath();
-            ctx.fillStyle = "rgba(58,134,255,0.55)";
-            const ex = bag.x + bag.w * 0.5 + (Math.random() - 0.5) * 40;
-            const ey = bag.y - 10 - Math.random() * 30;
-            ctx.arc(ex, ey, 2 + Math.random() * 2, 0, Math.PI * 2);
+            ctx.arc(bag.x + bag.w * 0.42 + i * 10, bag.y - 6 - i * 9, 2.5, 0, Math.PI * 2);
             ctx.fill();
           }
         }
 
-        // press hint on canvas
-        if (sponge.step === 2 && !sponge.sealed) {
-          ctx.save();
-          ctx.fillStyle = sponge.pressHeld ? "rgba(231,111,81,0.9)" : "rgba(26,155,142,0.85)";
-          roundRect(ctx, bag.x + bag.w * 0.18, bag.y + bag.h * 0.42, bag.w * 0.64, 28, 10);
-          ctx.fill();
-          ctx.fillStyle = "#fff";
-          ctx.font = "bold 13px 'Noto Sans TC', sans-serif";
-          ctx.textAlign = "center";
-          ctx.fillText(
-            sponge.pressHeld ? "排氣中…繼續按住" : "按住這裡排氣",
-            bag.x + bag.w / 2,
-            bag.y + bag.h * 0.42 + 19
-          );
-          ctx.textAlign = "left";
-          ctx.restore();
-        }
-
-        ctx.fillStyle = "rgba(22,50,63,0.8)";
-        ctx.font = "bold 14px 'Noto Sans TC', sans-serif";
+        ctx.fillStyle = "rgba(22,50,63,0.88)";
+        ctx.font = "bold 13px 'Noto Sans TC', sans-serif";
         let label = "密實袋中的海綿";
-        if (sponge.sealed) label = "密封後：外壓 > 內壓，保持凹陷";
-        else if (bag.p > 0.2) label = "按壓排氣中…粒子減少";
-        ctx.fillText(label, 16, h - 14);
-
+        if (sponge.sealed) label = "放手後外壓仍較大，袋子保持凹陷";
+        else if (sponge.step === 2) label = sponge.pressHeld ? "手在按壓，空氣從袋口排出" : "按住海綿，手會往下壓並排出空氣";
+        else if (bag.p > 0.2) label = "空氣被擠出，海綿變扁";
+        ctx.fillText(label + "　袋壁碰撞 " + Math.round(sponge.hits), 16, h - 14);
         updateSpongePressureUI();
       }
 
-      function drawSpongeBody(ctx, x, y, w, h, squash) {
-        roundRect(ctx, x, y, w, h, 12);
-        const g = ctx.createLinearGradient(x, y, x + w, y + h);
-        g.addColorStop(0, "#f4a261");
-        g.addColorStop(1, "#e76f51");
-        ctx.fillStyle = g;
-        ctx.fill();
-        ctx.strokeStyle = "rgba(180,80,40,0.35)";
-        ctx.stroke();
-        // pores
-        ctx.fillStyle = "rgba(255,255,255,0.35)";
-        const cols = 5;
-        const rows = 3;
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            const px = x + ((c + 0.5) / cols) * w;
-            const py = y + ((r + 0.5) / rows) * h;
-            ctx.beginPath();
-            ctx.arc(px, py, 3 + (1 - squash) * 2, 0, Math.PI * 2);
-            ctx.fill();
-          }
+      function drawPressingHand(ctx, cx, top, pressing) {
+        const drop = pressing ? 40 : 8;
+        ctx.save();
+        ctx.translate(cx, top + drop);
+        ctx.fillStyle = "#f4c7a8";
+        ctx.strokeStyle = "rgba(150, 96, 64, 0.4)";
+        ctx.lineWidth = 1.2;
+        for (let i = 0; i < 4; i++) {
+          roundRect(ctx, -36 + i * 18, -46, 14, 36, 7);
+          ctx.fill();
+          ctx.stroke();
         }
+        roundRect(ctx, -44, -18, 90, 42, 16);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(-48, 4, 11, 16, -0.7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawSpongeBody(ctx, x, y, w, h, squash) {
+        ctx.save();
+        roundRect(ctx, x, y, w, h, 8);
+        ctx.clip();
+        const body = ctx.createLinearGradient(x, y, x, y + h);
+        body.addColorStop(0, "#ffe08a");
+        body.addColorStop(0.55, "#f0b429");
+        body.addColorStop(1, "#d0892b");
+        ctx.fillStyle = body;
+        ctx.fillRect(x, y, w, h);
+        const padH = Math.max(8, h * 0.22);
+        const scour = ctx.createLinearGradient(x, y, x, y + padH);
+        scour.addColorStop(0, "#2f6b45");
+        scour.addColorStop(1, "#1e4d32");
+        ctx.fillStyle = scour;
+        ctx.fillRect(x, y, w, padH);
+        ctx.strokeStyle = "rgba(20, 60, 36, 0.35)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 7; i++) {
+          ctx.beginPath();
+          ctx.moveTo(x + (w * i) / 7, y);
+          ctx.lineTo(x + (w * i) / 7, y + padH);
+          ctx.stroke();
+        }
+        const pores = 18;
+        for (let i = 0; i < pores; i++) {
+          const px = x + ((i * 47) % Math.max(8, w - 10)) + 6;
+          const py = y + padH + ((i * 29) % Math.max(8, h - padH - 8)) + 4;
+          const pr = (2.2 + (i % 3)) * (1 - squash * 0.35);
+          ctx.beginPath();
+          ctx.fillStyle = i % 2 === 0 ? "rgba(255,248,220,0.55)" : "rgba(160,90,20,0.28)";
+          ctx.ellipse(px, py, pr, pr * (0.7 + squash * 0.4), 0.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+        ctx.strokeStyle = "rgba(120, 78, 20, 0.4)";
+        ctx.lineWidth = 1.3;
+        roundRect(ctx, x, y, w, h, 8);
+        ctx.stroke();
       }
 
       /* ========== Quiz + fireworks ========== */
@@ -2460,8 +2567,9 @@
               "排氣足夠了！可以點擊步驟 3：密封袋口並放手。";
           }
         } else if (sponge.step === 2 && !sponge.sealed && !sponge.pressHeld) {
-          // slight rebound if not sealed
-          sponge.press = clamp(sponge.press - dt * 0.25, 0, 1);
+          // slight rebound if not sealed, but keep unlock threshold once reached
+          const floor = sponge.press >= 0.55 ? 0.55 : 0;
+          sponge.press = clamp(sponge.press - dt * 0.25, floor, 1);
         }
 
         drawStorage();
@@ -2471,10 +2579,10 @@
       }
 
       function resizeAll() {
-        let r = resizeToParent(document.getElementById("canvas-storage"), 640 / 380);
+        let r = resizeToParent(document.getElementById("canvas-storage"), 640 / 440);
         storage.ctx = r.ctx; storage.w = r.w; storage.h = r.h;
 
-        r = resizeToParent(document.getElementById("canvas-food"), 640 / 380);
+        r = resizeToParent(document.getElementById("canvas-food"), 640 / 440);
         food.ctx = r.ctx; food.w = r.w; food.h = r.h;
 
         r = resizeToParent(document.getElementById("canvas-sponge"), 640 / 400);
@@ -2489,7 +2597,7 @@
 
         // re-init particle positions roughly on first resize only if empty
         if (!storage.particlesIn.length) initStorageParticles();
-        if (!food.particles.length) initFoodParticles();
+        if (!food.leftParticles.length) initFoodParticles();
       }
 
       function canvasLocalPoint(canvas, evt) {
